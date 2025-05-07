@@ -1,2 +1,2 @@
 # StockFlowCount
-A program to calculate the flow of major funds in the stock market
+A program to calculate the flow of major funds in the stock market, base on Hadoop MapReduce.
