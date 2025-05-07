@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-image: url('stocks.jpg');
+            background-size: cover;
+        }
+        /*设置顶格和底格的参数*/
+        header {
+            background-color: rgba(255, 255, 255, 0);
+            padding: 10px;
+            text-align: center;
+        }
+        footer {
+            background-color: rgba(255, 255, 255, 1);
+            padding: 10px;
+            text-align: center;
+        }
+        main {
+            margin: 20px 0;
+            background-color: rgba(255, 255, 255, 0.8); 
+            padding: 20px;
+            border-radius: 8px;
+            /*这一部分是让main中的内容全部居中*/
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+        }
+        /*设置button的各项参数*/
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 25px;
+            border: 2px solid #030303;
+            background: white;
+            color: #060505;
+            transition: background 0.3s, color 0.3s;
+            font-family: "Gill Sans", sans-serif;
+        }
+        button:hover {
+            background: #080808;
+            color: white;
+        }
+        /*这里的三项设置的是输出表格的一些ui参数，按照需求修改*/
+        table {
+            width: 38%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 0.5px solid black;
+        }
+        th, td {
+            padding: 4px;
+            font-size: 12.5px;
+            text-align: left;
+        }
+        /*对一些字体进行修改*/
+        h1 {
+            font-family: "Gill Sans", sans-serif;
+            font-size: 2.5em;                               
+            font-weight: 900;                              
+            text-align: center; 
+            color:aliceblue
+        }
+        p1{
+            font-family: "Gill Sans", sans-serif;
+            font-size: 1.1em;                               
+            font-weight: center;                              
+            text-align: left; 
+            color:rgb(13, 13, 13)
+        }
+        p2{
+            font-family: "Gill Sans", sans-serif;
+            font-size: 1.2em;                               
+            font-weight: bold;                              
+            text-align: center; 
+            color:rgb(13, 13, 13)
+        }
+        label{
+            font-family: "Gill Sans", sans-serif;
+            font-size: 1.0em;                               
+            font-weight: normal;                        
+            text-align: center; 
+            color:rgb(13, 13, 13)
+        }
+        /*注意内部始终保持20px的行距，参数根据实际情况调整*/
+    </style>
+</head>
+<body>
+    <header>
+        <h1>区间股票输出数据</h1>
+    </header>
+    <main>
+        <p1>请选择您需要查看的文件：</p1>
+        <div style="margin-top: 20px;"><input type="file" id="fileInput"></div>
+        <div id="controls" style="margin-top: 20px;">
+            <label for="startTime">开始时间：</label>
+            <input type="text" id="startTime" placeholder="YYYYMMDDHHMMSSmmm">
+        </div>
+        <div style="margin-top: 20px;">
+            <label for="endTime">结束时间：</label>
+            <input type="text" id="endTime" placeholder="YYYYMMDDHHMMSSmmm">
+        </div>
+        <div style="margin-top: 20px;"><button onclick="filterOutput()">筛选数据</button></div>
+        <div id="output" style="margin-top: 20px;"></div>
+    </main>
+    <footer>
+        <div style="margin-top: 20px;">
+            <label for="columnName">选择数据列：</label>
+            <input type="text" id="columnName" placeholder="输入列名">
+        </div>
+        <div style="margin-top: 20px;"><button onclick="drawPlot()">绘图</button></div>
+        <canvas id="myChart" width="400" height="200"></canvas>
+        <div style="margin-top: 20px;">
+            <label for="rowName">选择数据行：</label>
+            <input type="text" id="rowName" placeholder="输入时间段:YYYYMMDDHHMMSSmmm">
+        </div>
+        <div style="margin-top: 20px;"><button onclick="drawRoundPlot()">绘图</button></div>
+        <canvas id="myVolumeChart" width="200" height="200"></canvas>
+        <canvas id="myAmountChart" width="200" height="200"></canvas>
+    </footer>
+
+    <script>
+        //选择文件时则触发监听
+        document.getElementById('fileInput').addEventListener('change', SplitOutput, false);
+        let full_output = [];
+        //监听选择文件并写入full_output文件
+        function SplitOutput(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const contents = e.target.result;
+                full_output = contents.split('\n').map(line => line.trim().split(','));
+            };
+            reader.readAsText(file);
+        }
+ 
+        //筛选对应时间的数据
+        let filteredData = [];
+        function filterOutput() {
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            if (!startTime) {
+                alert('请输入开始时间');
+                return;
+            }
+            if(!endTime){
+                alert('请输入结束时间')
+                return;
+            }
+            //筛选范围内的数据条目，这里不用forEach是因为filter可以return直接返回需要的元素
+            filteredData = full_output.filter((row,index) => {
+                //检索最后一个元素，也就是时间元素
+                if (index === 0){
+                    return true;
+                }
+                const rowTime = row[row.length - 1];
+                const rowTimeStart = rowTime.substring(0,17);
+                const rowTimeEnd = rowTime.substring(21);
+                return rowTimeStart >= startTime && rowTimeEnd <= endTime;
+            });
+            plotOut(filteredData)
+        }
+
+        //给这里加上label手动输入
+        let label = []
+        //将读入的文件以表格形式输出的方法，注意需要检查这里输出格式是不是表格
+        function plotOut(data) {
+            //标记了output这个文件
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = ''; 
+            const table = document.createElement('table');
+            const headRow = document.createElement('tr');
+            //添加表头
+            data[0].forEach(header => {
+                    const th = document.createElement('th');
+                    th.textContent = header;
+                    headRow.appendChild(th);
+                });
+            table.appendChild(headRow);
+            //用forEach循环遍历data，每次都把遍历到的内容赋值给row变量
+            data.slice(1).forEach(row => {
+                const eachRow = document.createElement('tr');
+                row.forEach(elem => {
+                    const eachElem = document.createElement('td');
+                    eachElem.textContent = elem;
+                    eachRow.appendChild(eachElem);
+                });
+                table.appendChild(eachRow);
+            });
+            //给先前设置好的放在页面上的output添加一个自定义的table
+            outputDiv.appendChild(table);
+        }
+        let myChart = null;
+        function drawPlot() {
+            const columnName = document.getElementById('columnName').value.trim();
+            let columnIndex = -1;
+            for (let i = 0; i < filteredData[0].length; i++) {
+                if (filteredData[0][i] === columnName) {
+                    columnIndex = i;
+                    break;
+                }
+            }
+            const columnLabel = filteredData[0][columnIndex];
+            const labels = filteredData.slice(1).map(row => {
+                const lastColumn = row[row.length - 1]; 
+                const specificChars = lastColumn.slice(8, 12);
+                return specificChars; 
+            });
+            const chartData = filteredData.slice(1).map(row => {
+                const value = parseFloat(row[columnIndex]);
+                return value;
+            }); 
+            const ctx = document.getElementById('myChart').getContext('2d');
+            if (myChart) {
+                myChart.data.labels = labels;
+                myChart.data.datasets[0].label = `Column ${columnIndex + 1}`;
+                myChart.data.datasets[0].data = chartData;
+                myChart.options.plugins.title.text = `Column ${columnIndex + 1}: ${columnLabel}`;
+                myChart.update(); // 更新图表
+                } else {
+                    myChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels, 
+                            datasets: [{
+                                label: `Column ${columnIndex+1}`,
+                                data: chartData,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                borderWidth: 1,
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: `Column ${columnIndex + 1}: ${columnLabel}`, 
+                                    position: 'top' 
+                                }
+                        }
+                    }
+                });
+            }
+        }
+        let myVolumeChart = null;
+        let myAmountChart = null;
+        function drawRoundPlot(){
+            if (myVolumeChart) {
+                myVolumeChart.destroy();
+            }
+            if (myAmountChart) {
+                myAmountChart.destroy();
+            }
+            const rowName = document.getElementById('rowName').value.trim();
+            let rowIndex = -1;
+            for (let i = 1; i < filteredData.length; i++) {
+                if (filteredData[i][filteredData[0].length - 1].slice(0,17) === rowName) {
+                    rowIndex = i;
+                    break;
+                }
+            }
+            const rowLabel = filteredData[rowIndex][19];
+            const headers = filteredData[0];
+            const volumes = [3, 5, 7, 9, 11, 13, 15, 17];
+            const amounts = [4, 6, 8, 10, 12, 14, 16, 18];
+            const volumeLabels = [headers[3],headers[5],headers[7],headers[9],headers[11],headers[13],headers[15],headers[17]]; 
+            const amountLabels = [headers[4],headers[6],headers[8],headers[10],headers[12],headers[14],headers[16],headers[18]]; 
+            const volumeData = volumes.map(index => parseFloat(filteredData[rowIndex][index]));
+            const amountData = amounts.map(index => parseFloat(filteredData[rowIndex][index]));
+            const volumeCtx = document.getElementById('myVolumeChart').getContext('2d');
+            const amountCtx = document.getElementById('myAmountChart').getContext('2d');
+            myVolumeChart = new Chart(volumeCtx, {
+                type: 'pie',
+                data: {
+                    labels: volumeLabels, 
+                    datasets: [{
+                        data: volumeData,
+                        backgroundColor: generateColors(volumeData.length), 
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    layout: {
+                        padding: {
+                            left: 325,
+                            right:325,
+                            top: 325,
+                            bottom: 325
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${rowLabel}成交量占比`,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+    
+            myAmountChart = new Chart(amountCtx, {
+                type: 'pie',
+                data: {
+                    labels: amountLabels, 
+                    datasets: [{
+                        data: amountData,
+                        backgroundColor: generateColors(amountData.length), 
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    layout: {
+                        padding: {
+                            left: 325,
+                            right:325,
+                            top: 325,
+                            bottom: 325
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${rowLabel}成交额占比`,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        }
+        function generateColors(numColors) {
+            const colors = [];
+            const hueStep = 252 / numColors; 
+            for (let i = 0; i < numColors; i++) {
+                const hue = Math.round(i * hueStep);
+                colors.push(`hsl(${hue}, 100%, 50%)`);
+            }
+            return colors;    
+        }
+    </script>
+</body>
+</html>
